@@ -2,6 +2,64 @@ import pandas as pd
 import numpy as np
 from glob import glob
 import cv2
+from PIL import Image
+Image.MAX_IMAGE_PIXELS = 689733632
+
+
+def refine_segmentation(image, mask, kernel_size=15):
+    # Create a morphological kernel
+    kernel = np.ones((kernel_size, kernel_size), np.uint8)    
+    # Close small holes in the foreground mask: Dilation followed by Erosion
+    closing = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
+    return closing
+
+def segment_background_foreground(image, output_path=None):
+    # Load the image
+    # Convert to RGB
+    image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    # Define the range for background (white areas)
+    # These thresholds might need adjustment for different image types
+    lower = np.array([200, 200, 200], dtype="uint8")
+    upper = np.array([255, 255, 255], dtype="uint8")
+
+    # Create a mask that identifies the background
+    background_mask = cv2.inRange(image_rgb, lower, upper)
+    # Invert mask to get the foreground
+    foreground_mask = cv2.bitwise_not(background_mask)
+
+    refined_foreground_mask = refine_segmentation(image_rgb, foreground_mask)
+
+    # Apply the foreground mask to the image
+    segmented_image = cv2.bitwise_and(image_rgb, image_rgb, mask=refined_foreground_mask)
+
+    # If an output path is provided, save the segmented image
+    if output_path is not None:
+        cv2.imwrite(output_path, cv2.cvtColor(segmented_image, cv2.COLOR_RGB2BGR))
+
+    return segmented_image
+
+def downsample_image(image, scale_factor):
+    """
+    Downsamples an image represented as a NumPy array by a given scale factor.
+    
+    Parameters:
+        input_image_array (numpy.ndarray): Input image represented as a NumPy array.
+        scale_factor (float): Scale factor for downsampling. Should be less than 1.
+        
+    Returns:
+        numpy.ndarray: Downsampled image as a NumPy array.
+    """
+    
+    # Calculate the new dimensions
+    height, width = image.shape[:2]
+    new_width = int(width * scale_factor)
+    new_height = int(height * scale_factor)
+    
+    # Resize the image
+    downscaled_image = cv2.resize(image, (new_width, new_height), interpolation=cv2.INTER_AREA)
+    
+    # Save the downsampled image
+    return downscaled_image
 
 patch_number_min = 130
 patch_number_max = 26446
@@ -15,3 +73,28 @@ height_per_zoom_dist = [(24160, 48000, 34582.545454545456, 4122.684129272102), (
 patch_number = np.random.normal(patch_number_mean, patch_number_std)
 patch_number = int(np.clip(patch_number, patch_number_min, patch_number_max))
 num_patches_per_zoom = np.round(patch_number_to_zoom_lvl_probabilities * patch_number).astype(int)
+
+#Read image
+image_path = "C:/Users/stlp/Desktop/Linda/convert2tif/MP_0001_x40_z0.tif"
+image = Image.open(image_path)
+image = np.array(image)
+
+#forground background seperation
+segmented_image = segment_background_foreground(image)
+fg_bg= segmented_image[:,:,0]
+# Display the result
+cv2.imwrite("C:/Users/stlp/Desktop/Linda/Pg_out/seg.jpg", fg_bg)
+# cv2.imshow('Foreground',fg_bg)
+# cv2.waitKey(0)
+# cv2.destroyAllWindows()
+
+#Downscale
+downscaled_image = downsample_image(image,float(20/40)) #Output size/Input size
+cv2.imwrite("C:/Users/stlp/Desktop/Linda/Pg_out/downscaled_image.jpg", downscaled_image)
+
+
+# Example usage
+# image_path = os.path.join(img_root, img_name)
+# output_path = os.path.join(segmented_root, img_name.split(".")[0] + "_segmented.jpg")
+# segmented_image = segment_background_foreground(image_path, output_path)
+
