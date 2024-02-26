@@ -38,28 +38,36 @@ def segment_background_foreground(image, output_path=None):
 
     return segmented_image
 
-def downsample_image(image, scale_factor):
-    """
-    Downsamples an image represented as a NumPy array by a given scale factor.
+def zoom_in(img, zoom_factor):
     
-    Parameters:
-        input_image_array (numpy.ndarray): Input image represented as a NumPy array.
-        scale_factor (float): Scale factor for downsampling. Should be less than 1.
-        
-    Returns:
-        numpy.ndarray: Downsampled image as a NumPy array.
-    """
-    
-    # Calculate the new dimensions
-    height, width = image.shape[:2]
-    new_width = int(width * scale_factor)
-    new_height = int(height * scale_factor)
-    
-    # Resize the image
-    downscaled_image = cv2.resize(image, (new_width, new_height), interpolation=cv2.INTER_AREA)
-    
-    # Save the downsampled image
-    return downscaled_image
+    if zoom_factor == 0:
+        return img
+
+
+    height, width = img.shape[:2] # It's also the final desired shape
+    new_height, new_width = int(height * zoom_factor), int(width * zoom_factor)
+
+    ### Crop only the part that will remain in the result (more efficient)
+    # Centered bbox of the final desired size in resized (larger/smaller) image coordinates
+    y1, x1 = max(0, new_height - height) // 2, max(0, new_width - width) // 2
+    y2, x2 = y1 + height, x1 + width
+    bbox = np.array([y1,x1,y2,x2])
+    # Map back to original image coordinates
+    bbox = (bbox / zoom_factor).astype(np.int)
+    y1, x1, y2, x2 = bbox
+    cropped_img = img[y1:y2, x1:x2]
+
+    # Handle padding when downscaling
+    resize_height, resize_width = min(new_height, height), min(new_width, width)
+    pad_height1, pad_width1 = (height - resize_height) // 2, (width - resize_width) //2
+    pad_height2, pad_width2 = (height - resize_height) - pad_height1, (width - resize_width) - pad_width1
+    pad_spec = [(pad_height1, pad_height2), (pad_width1, pad_width2)] + [(0,0)] * (img.ndim - 2)
+
+    result = cv2.resize(cropped_img, (resize_width, resize_height))
+    result = np.pad(result, pad_spec, mode='constant')
+    assert result.shape[0] == height and result.shape[1] == width
+    return result
+
 
 patch_number_min = 130
 patch_number_max = 26446
@@ -75,7 +83,7 @@ patch_number = int(np.clip(patch_number, patch_number_min, patch_number_max))
 num_patches_per_zoom = np.round(patch_number_to_zoom_lvl_probabilities * patch_number).astype(int)
 
 #Read image
-image_path = "C:/Users/stlp/Desktop/Linda/convert2tif/MP_0001_x40_z0.tif"
+image_path = "C:/Users/stlp/Desktop/Linda/convert2tif/MP_0001_x2.5_z0.tif"
 image = Image.open(image_path)
 image = np.array(image)
 
@@ -88,9 +96,9 @@ cv2.imwrite("C:/Users/stlp/Desktop/Linda/Pg_out/seg.jpg", fg_bg)
 # cv2.waitKey(0)
 # cv2.destroyAllWindows()
 
-#Downscale
-downscaled_image = downsample_image(image,float(20/40)) #Output size/Input size
-cv2.imwrite("C:/Users/stlp/Desktop/Linda/Pg_out/downscaled_image.jpg", downscaled_image)
+a = zoom_in(image,2)
+cv2.imwrite("C:/Users/stlp/Desktop/Linda/Pg_out/zoom.jpg", a)
+
 
 
 # Example usage
