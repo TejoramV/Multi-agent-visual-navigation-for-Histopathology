@@ -3,8 +3,9 @@ import numpy as np
 from glob import glob
 import cv2
 from PIL import Image
-Image.MAX_IMAGE_PIXELS = 689733632
-
+Image.MAX_IMAGE_PIXELS = 6033899500
+import random
+import csv
 
 def refine_segmentation(image, mask, kernel_size=15):
     # Create a morphological kernel
@@ -44,7 +45,7 @@ def zoom_in(img, zoom_factor):
         return img
 
 
-    height, width = img.shape[:2] # It's also the final desired shape
+    height, width = img.shape[:2] 
     new_height, new_width = int(height * zoom_factor), int(width * zoom_factor)
 
     ### Crop only the part that will remain in the result (more efficient)
@@ -53,11 +54,12 @@ def zoom_in(img, zoom_factor):
     y2, x2 = y1 + height, x1 + width
     bbox = np.array([y1,x1,y2,x2])
     # Map back to original image coordinates
-    bbox = (bbox / zoom_factor).astype(np.int)
+    bbox = (bbox / zoom_factor).astype(np.int64)
     y1, x1, y2, x2 = bbox
     cropped_img = img[y1:y2, x1:x2]
+    result = cropped_img
 
-    # Handle padding when downscaling
+    # # Handle padding when downscaling
     resize_height, resize_width = min(new_height, height), min(new_width, width)
     pad_height1, pad_width1 = (height - resize_height) // 2, (width - resize_width) //2
     pad_height2, pad_width2 = (height - resize_height) - pad_height1, (width - resize_width) - pad_width1
@@ -67,7 +69,6 @@ def zoom_in(img, zoom_factor):
     result = np.pad(result, pad_spec, mode='constant')
     assert result.shape[0] == height and result.shape[1] == width
     return result
-
 
 patch_number_min = 130
 patch_number_max = 26446
@@ -80,24 +81,50 @@ width_per_zoom_dist = [(30160, 75960, 50200.009090909094, 8350.353129708135), (1
 height_per_zoom_dist = [(24160, 48000, 34582.545454545456, 4122.684129272102), (9853, 40846, 16490.03961709244, 2221.30538133036), (6569, 20375, 11500.962139917696, 1584.9441125426117), (5483, 15669, 8435.98998487745, 1119.8328788922317), (3941, 12225, 6753.860526605707, 1020.0673029608719), (3284, 10188, 5823.7535916938305, 787.7561927128141), (2815, 8732, 4981.578917636425, 791.2456956889796), (2463, 7641, 4338.460869565218, 576.4211152038307), (2190, 6792, 3912.547923942569, 502.67489653815693), (1971, 7240, 3323.9517137765974, 446.84795365074393), (1791, 4364, 3132.636927744071, 457.4231728389159), (1642, 8399, 2951.702337369755, 431.6551565078864), (1516, 4374, 2716.8520739630185, 418.1395828566948), (1483, 4062, 2543.7697551123456, 389.7904252498075), (1611, 3791, 2318.4827664916684, 349.7909128453299), (1232, 3554, 2215.294685990338, 307.78949472577636), (1159, 3345, 2130.2518325845354, 318.4048036873566), (1095, 3159, 2009.0177705977383, 316.5059578144224), (1093, 3597, 1938.708867978329, 306.47103535274147), (985, 2880, 1674.2580576609762, 234.12260419871743), (989, 2708, 1663.2148148148149, 292.13344579299996), (896, 2585, 1639.8813236972233, 315.78639964211965), (857, 2472, 1507.3540983606558, 276.31452988052246), (821, 2369, 1465.4586872586872, 240.8099549305292), (788, 2275, 1461.1454154727794, 253.49360305795298), (978, 2187, 1336.7565217391304, 211.60572817529624), (895, 1886, 1391.6675555555555, 234.06721478294844), (704, 2031, 1290.048231511254, 196.6726414598678), (833, 1961, 1211.8478824546241, 194.62459315860843), (848, 1697, 1236.447342995169, 203.13324886009488), (636, 1643, 1112.3836898395723, 205.87308821348213), (616, 1591, 1106.581081081081, 154.27157434564384), (771, 1543, 1118.3959484346224, 159.3933473306579), (748, 1447, 1114.1818181818182, 177.55316616933902), (563, 1625, 1053.5856697819315, 196.77656173019756), (547, 1333, 1017.546, 107.37988584460312), (688, 1376, 1094.042372881356, 154.11953285657455), (519, 1263, 925.1884272997032, 110.12831112199531), (652, 1306, 886.6735537190083, 158.4254986165074), (493, 1440, 866.8214359969506, 129.2520341201543), (620, 1171, 890.0155440414508, 138.64899494707328), (606, 1143, 869.53125, 141.822005225898), (592, 1116, 790.1398843930635, 125.21977938456682), (578, 1091, 867.1830985915493, 115.81083530264912), (565, 1067, 863.065, 119.74519103078839), (553, 1043, 768.7333333333333, 89.19709632234205), (541, 1021, 872.1364392678869, 66.40820434223562), (530, 1000, 731.7142857142857, 123.41289193904625), (519, 980, 756.2285714285714, 86.14633255249407), (526, 960, 725.8125, 66.70273320095117), (569, 941, 686.0, 89.07635013765525), (506, 923, 713.2536231884058, 88.8856178837873), (480, 906, 688.9594594594595, 95.66713677730338), (551, 889, 695.5212765957447, 62.961948779520654), (527, 873, 674.3636363636364, 63.947986999766556), (532, 857, 649.0727272727273, 70.14016820333615), (522, 842, 691.1508951406649, 70.8341259163928), (500, 828, 672.0322580645161, 78.49705402041037), (492, 814, 652.6808510638298, 72.89517579781833), (424, 849, 587.9290271132377, 83.53495235100546)] 
 patch_number = np.random.normal(patch_number_mean, patch_number_std)
 patch_number = int(np.clip(patch_number, patch_number_min, patch_number_max))
-num_patches_per_zoom = np.round(patch_number_to_zoom_lvl_probabilities * patch_number).astype(int)
-
+num_patches_per_zoom = [int(x * patch_number) for x in patch_number_to_zoom_lvl_probabilities]
 #Read image
-image_path = "C:/Users/stlp/Desktop/Linda/convert2tif/MP_0001_x2.5_z0.tif"
+image_path = "C:/Users/stlp/Desktop/Linda/convert2tif/MP_0029_x0.625_z0.tif"
 image = Image.open(image_path)
 image = np.array(image)
 
 #forground background seperation
-segmented_image = segment_background_foreground(image)
-fg_bg= segmented_image[:,:,0]
-# Display the result
-cv2.imwrite("C:/Users/stlp/Desktop/Linda/Pg_out/seg.jpg", fg_bg)
+
 # cv2.imshow('Foreground',fg_bg)
 # cv2.waitKey(0)
 # cv2.destroyAllWindows()
 
-a = zoom_in(image,2)
-cv2.imwrite("C:/Users/stlp/Desktop/Linda/Pg_out/zoom.jpg", a)
+zoom_image = zoom_in(image,3)
+cv2.imwrite("C:/Users/stlp/Desktop/Linda/Pg_out/zoom.jpg", zoom_image)
+
+segmented_image = segment_background_foreground(zoom_image)
+fg_bg= segmented_image[:,:,0]
+
+# Display the result
+cv2.imwrite("C:/Users/stlp/Desktop/Linda/Pg_out/seg.jpg", fg_bg)
+
+print((num_patches_per_zoom))
+
+# for zoom in range(1,3):
+#     zoom_image = zoom_in(image,zoom)
+#     segmented_image = segment_background_foreground(zoom_image)
+#     fg_bg= segmented_image[:,:,0] 
+#     # print((np.array(fg_bg).shape))   
+#     x, y = np.array(fg_bg).shape
+#     print(x,y)
+#     for j in range(1,num_patches_per_zoom[zoom-1]+1):
+#         pixel_x = random.randint(0, x)
+#         pixel_y =random.randint(0, y)
+#         width = np.random.normal(width_per_zoom_dist[zoom-1][2], width_per_zoom_dist[zoom-1][3])
+#         width = int(np.clip(patch_number, width_per_zoom_dist[zoom-1][0], width_per_zoom_dist[zoom-1][1]))
+#         height = np.random.normal(height_per_zoom_dist[zoom-1][2], height_per_zoom_dist[zoom-1][3])
+#         height = int(np.clip(patch_number, height_per_zoom_dist[zoom-1][0], height_per_zoom_dist[zoom-1][1]))
+#         print(pixel_x+width,pixel_y+height)         
+
+
+#         if ((pixel_x+width<x) and (pixel_y+height<y)):
+#             if (fg_bg[pixel_x,pixel_y]!=0 and fg_bg[pixel_x+width,pixel_y]!=0 and fg_bg[pixel_x,pixel_y+height]!=0):
+#                 print(pixel_x,pixel_y,width,height)
+
 
 
 
