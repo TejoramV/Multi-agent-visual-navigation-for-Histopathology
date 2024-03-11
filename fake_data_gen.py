@@ -5,6 +5,7 @@ import cv2
 import random
 import csv
 import tifffile as tifi #pip install imagecodecs
+import os
 
 
 def refine_segmentation(image, mask, kernel_size=15):
@@ -98,27 +99,53 @@ def random_xy_fgbg_generator(image):
 
     return pixel_x,pixel_y
 
+# Path to the folder containing images
+folder_path = "/projects/brain1/tejoram/Navigation/40X"
+#C:/Users/stlp/Desktop/Linda/40X
+# Get a list of all files in the folder
+image_files = [file for file in os.listdir(folder_path) if file.endswith(('.tif'))]
 
-# to-do random x,y generator and translate W,H to wh 
-#open image
-image_path = "C:/Users/stlp/Desktop/Linda/convert2tif/MP_0029_x40_z0.tif"
-image = tifi.imread(image_path)
+# Iterate over each image file
+for image_file in image_files:
+    # Construct the full path to the image file
+    image_path = os.path.join(folder_path, image_file)    
+    image = tifi.imread(image_path)
+    result = []
 
-zoom = 4
+    for zoom in range(1,61):
+        patch_number = random_patch_number_generator(zoom)
+        #block 1 
+        for i in range(patch_number):
+            zoom_image = zoom_in(image,zoom)
+            #block 2
+            x, y = random_xy_fgbg_generator(zoom_image)
+            W,H = random_WH_generator(zoom)
+            w,h = translate_encoder(zoom, W, H)
+            #Edges
+            max_x, max_y = zoom_image[:,:,0].shape
+            if ((x+w<max_x) and (y+h<max_y)):
+                X,Y = translate_decoder(zoom, x, y)
+                W,H = translate_decoder(zoom, w, h)
+                file_name = os.path.splitext(image_file)[0]
+                result.append([file_name, X, Y, W, H, zoom])
 
-#block 1 
-zoom_image = zoom_in(image,zoom)
-#block 2
-x, y = random_xy_fgbg_generator(zoom_image)
-W,H = random_WH_generator(zoom)
-w,h = translate_encoder(zoom, W, H)
-#Edges
-max_x, max_y = zoom_image[:,:,0].shape
-if ((x+w<max_x) and (y+h<max_y)):
-    X,Y = translate_decoder(zoom, x, y)
-    W,H = translate_decoder(zoom, w, h)
-    print(X,Y,W,H)
+    break #To run for one image
+
+
+# print(result)
+
+csv_file_path = 'data_gen.csv'
+
+# Open the CSV file in append mode
+with open(csv_file_path, mode='w', newline='') as file:
+    # Create a CSV writer object
+    writer = csv.writer(file)
+    writer.writerow(["File_name","x","y","w","h","zoom"])
+    # Append the data to the CSV file
+    for row in result:
+        writer.writerow(row)
+
+print("Data appended successfully.")
 
 
 
-# cv2.imwrite("C:/Users/stlp/Desktop/Linda/Pg_out/zoom.jpg", zoom_image)
