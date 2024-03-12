@@ -71,7 +71,9 @@ def random_patch_number_generator(zoom):
     patch_number = int(np.clip(patch_number, patch_number_min, patch_number_max))
     num_patches_per_zoom = [int(x * patch_number) for x in patch_number_to_zoom_lvl_probabilities]
     return num_patches_per_zoom[zoom-1]
-
+# todo bin (0,2)->1 (3,6)->5 (7,12)->10 (13-27)->20 (28 45)->40 (>)50
+# fix overlap
+# Recheck num
 def translate_encoder(zoom, X, Y):
     x= X//zoom
     y= Y//zoom
@@ -99,53 +101,52 @@ def random_xy_fgbg_generator(image):
 
     return pixel_x,pixel_y
 
+def master(folder_path, csv_file_path):
+
+    # Get a list of all files in the folder
+    image_files = [file for file in os.listdir(folder_path) if file.endswith(('.tif'))]
+
+    # Iterate over each image file
+    for image_file in image_files:
+        # Construct the full path to the image file
+        image_path = os.path.join(folder_path, image_file)    
+        image = tifi.imread(image_path)
+        result = []
+
+        for zoom in range(1,61):
+            patch_number = random_patch_number_generator(zoom)
+            #block 1 
+            for i in range(patch_number):
+                zoom_image = zoom_in(image,zoom)
+                #block 2
+                x, y = random_xy_fgbg_generator(zoom_image)
+                W,H = random_WH_generator(zoom)
+                w,h = translate_encoder(zoom, W, H)
+                #Edges
+                max_x, max_y = zoom_image[:,:,0].shape
+                if ((x+w<max_x) and (y+h<max_y)):
+                    X,Y = translate_decoder(zoom, x, y)
+                    W,H = translate_decoder(zoom, w, h)
+                    file_name = os.path.splitext(image_file)[0]
+                    result.append([file_name, X, Y, W, H, zoom])
+
+
+
+
+    # Open the CSV file in append mode
+    with open(csv_file_path, mode='w', newline='') as file:
+        # Create a CSV writer object
+        writer = csv.writer(file)
+        writer.writerow(["File_name","x","y","w","h","zoom"])
+        # Append the data to the CSV file
+        for row in result:
+            writer.writerow(row)
+
+    print("Data appended successfully.")
+
+
 # Path to the folder containing images
-folder_path = "/projects/brain1/tejoram/Navigation/40X"
 #C:/Users/stlp/Desktop/Linda/40X
-# Get a list of all files in the folder
-image_files = [file for file in os.listdir(folder_path) if file.endswith(('.tif'))]
-
-# Iterate over each image file
-for image_file in image_files:
-    # Construct the full path to the image file
-    image_path = os.path.join(folder_path, image_file)    
-    image = tifi.imread(image_path)
-    result = []
-
-    for zoom in range(1,61):
-        patch_number = random_patch_number_generator(zoom)
-        #block 1 
-        for i in range(patch_number):
-            zoom_image = zoom_in(image,zoom)
-            #block 2
-            x, y = random_xy_fgbg_generator(zoom_image)
-            W,H = random_WH_generator(zoom)
-            w,h = translate_encoder(zoom, W, H)
-            #Edges
-            max_x, max_y = zoom_image[:,:,0].shape
-            if ((x+w<max_x) and (y+h<max_y)):
-                X,Y = translate_decoder(zoom, x, y)
-                W,H = translate_decoder(zoom, w, h)
-                file_name = os.path.splitext(image_file)[0]
-                result.append([file_name, X, Y, W, H, zoom])
-
-    break #To run for one image
-
-
-# print(result)
-
-csv_file_path = 'data_gen.csv'
-
-# Open the CSV file in append mode
-with open(csv_file_path, mode='w', newline='') as file:
-    # Create a CSV writer object
-    writer = csv.writer(file)
-    writer.writerow(["File_name","x","y","w","h","zoom"])
-    # Append the data to the CSV file
-    for row in result:
-        writer.writerow(row)
-
-print("Data appended successfully.")
-
-
-
+folder_path = "C:/Users/stlp/Desktop/Linda/40X"
+csv_file_path = "C:/Users/stlp/Desktop/Linda/data_gen_final.csv"
+master(folder_path, csv_file_path)
