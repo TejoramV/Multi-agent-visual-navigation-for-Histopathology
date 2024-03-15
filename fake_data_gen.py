@@ -7,7 +7,9 @@ import csv
 import tifffile as tifi #pip install imagecodecs
 import os
 
-
+#write explaination
+#fix delete bg
+#run for all images
 def refine_segmentation(image, mask, kernel_size=15):
     # Create a morphological kernel
     kernel = np.ones((kernel_size, kernel_size), np.uint8)    
@@ -62,18 +64,18 @@ def random_WH_generator(zoom):
     return width, height #W, H (40X scale)
 
 def random_patch_number_generator(zoom):
-    patch_number_min = 130
-    patch_number_max = 26446
-    patch_number_mean = 8694.8
-    patch_number_std = 6249.980908770843
-    patch_number_to_zoom_lvl_probabilities = [0.00036146399490007163, 0.056983155777837656, 0.019962670627435775, 0.1151657148114801, 0.029827351651890457, 0.027218238815975394, 0.029084707444186675, 0.027964169059996453, 0.02540434676884049, 0.18809929087336275, 0.02383033537286654, 0.023337429925275533, 0.019726076012592093, 0.013015989852719852, 0.014396125105974671, 0.013604190353511786, 0.013896647585749117, 0.010170282401961106, 0.011524129364677739, 0.13916692407284487, 0.007097838445310497, 0.008638989478111711, 0.006013446460610283, 0.004255417030869025, 0.004587306698913636, 0.004156835941350824, 0.0036967908569325507, 0.004087829178688083, 0.003801944019085299, 0.0034010475883779465, 0.0024579551653204873, 0.00291800024973876, 0.0017843177202794445, 0.0020964911704204154, 0.002109635315689509, 0.0032860363172733786, 0.0019387614271912934, 0.002214788477842257, 0.002385662366340473, 0.09482843604387516, 0.0012684100184675241, 0.0014721442701384735, 0.0028424214144414724, 0.0011665428926320495, 0.0006572072634546756, 0.0014294257980139197, 0.003949815653362601, 0.0007820766435110641, 0.000460045084418273, 0.0005783423918401146, 0.0003417477769964314, 0.00045347301178372626, 0.00024316668747823, 0.00030888741382369757, 0.0002891711959200573, 0.0005421959923501075, 0.001284840200053891, 0.0009168041325192726, 0.00015444370691184879, 0.01236206862558245]  
+    patch_number_min = 69.66666666666667
+    patch_number_max = 709.125
+    patch_number_mean = 278.47684144818976
+    patch_number_std = 131.63679609746254
+    # patch_number_to_zoom_lvl_probabilities = [0.05734461977273773, 0.19217397590678173, 0.31772027944452846, 0.27394698966212977, 0.13471763089925667, 0.024096504314565684]
+    # bin (0,2)->1 (3,6)->5 (7,12)->10 (13-27)->20 (28 45)->40 (>)50
+    patch_number_to_zoom_lvl_probabilities = {1:0.05734461977273773, 5:0.19217397590678173, 10:0.31772027944452846, 20:0.27394698966212977, 40:0.13471763089925667, 50:0.024096504314565684}
     patch_number = np.random.normal(patch_number_mean, patch_number_std)
     patch_number = int(np.clip(patch_number, patch_number_min, patch_number_max))
-    num_patches_per_zoom = [int(x * patch_number) for x in patch_number_to_zoom_lvl_probabilities]
-    return num_patches_per_zoom[zoom-1]
-# todo bin (0,2)->1 (3,6)->5 (7,12)->10 (13-27)->20 (28 45)->40 (>)50
-# fix overlap
-# Recheck num
+    num_patches_per_zoom = patch_number*patch_number_to_zoom_lvl_probabilities[zoom] 
+    return num_patches_per_zoom
+
 def translate_encoder(zoom, X, Y):
     x= X//zoom
     y= Y//zoom
@@ -99,9 +101,64 @@ def random_xy_fgbg_generator(image):
         # You may want to take appropriate action here, such as choosing a fallback strategy
         pixel_x, pixel_y = None, None
 
-    return pixel_x,pixel_y
+    return pixel_x,pixel_y,fg_bg
 
+def calculate_overlap(rect1, rect2):
+    # Calculate the overlap area between two rectangles
+    x_overlap = max(0, min(rect1[0]+rect1[2], rect2[0]+rect2[2]) - max(rect1[0], rect2[0]))
+    y_overlap = max(0, min(rect1[1]+rect1[3], rect2[1]+rect2[3]) - max(rect1[1], rect2[1]))
+    overlap_area = x_overlap * y_overlap
+    return overlap_area
+
+def delete_helper(new_data, value, threshold):
+    overlapping_helper = False        
+    for i in range(len(new_data)):
+        overlap_area = calculate_overlap(new_data[i][1:5], value[1:5])
+        total_area = new_data[i][3] * new_data[i][4]
+        if overlap_area / total_area > threshold:
+            overlapping_helper = True           
+    return overlapping_helper
+
+def delete_overlapping_rectangles(data, threshold=0.3): #threshold -> allowed overlap percentage
+    new_data = []
+    for i in range(len(data)):
+        overlapping = False
+        for j in range(len(data)):
+            if i != j:
+                overlap_area = calculate_overlap(data[i][1:5], data[j][1:5])
+                total_area = data[i][3] * data[i][4]
+                if overlap_area / total_area > threshold:
+                    overlapping = True
+                    break
+        if not overlapping:
+            new_data.append(data[i])
+        else:
+            overlapping_helper = delete_helper(new_data, data[i], threshold)
+            if not overlapping_helper:
+                new_data.append(data[i])
+    return new_data
+
+def overlap_remover(temp_result):
+    residue = 0
+    temp_cut_result = delete_overlapping_rectangles(temp_result)
+    residue = len(temp_result) - len(temp_cut_result)
+    return temp_cut_result,residue 
+
+def fg_bg_area(x,y,w,h,fg_bg):
+    roi = fg_bg[y:y+h, x:x+w]
+    non_black_pixels = cv2.countNonZero(roi)
+
+    # Calculate the total number of pixels in the region
+    total_pixels = w * h
+
+    # Check if more than 50% of pixels are non-black
+    if non_black_pixels > total_pixels / 2:
+        return False
+    else:
+        return True
+  
 def master(folder_path, csv_file_path):
+    zoom_dict = [1,5,10,20,40,50]
 
     # Get a list of all files in the folder
     image_files = [file for file in os.listdir(folder_path) if file.endswith(('.tif'))]
@@ -112,23 +169,32 @@ def master(folder_path, csv_file_path):
         image_path = os.path.join(folder_path, image_file)    
         image = tifi.imread(image_path)
         result = []
+        residue = 0
 
-        for zoom in range(1,61):
-            patch_number = random_patch_number_generator(zoom)
+        for zoom in zoom_dict:
+            patch_number = int(random_patch_number_generator(zoom)+residue)
+            temp_result = []
             #block 1 
             for i in range(patch_number):
                 zoom_image = zoom_in(image,zoom)
                 #block 2
-                x, y = random_xy_fgbg_generator(zoom_image)
+                x, y, fg_bg = random_xy_fgbg_generator(zoom_image)
                 W,H = random_WH_generator(zoom)
                 w,h = translate_encoder(zoom, W, H)
+                if(fg_bg_area(x,y,w,h,fg_bg)):
+                    continue
                 #Edges
                 max_x, max_y = zoom_image[:,:,0].shape
-                if ((x+w<max_x) and (y+h<max_y)):
+                if((x+w<max_x) and (y+h<max_y)):
                     X,Y = translate_decoder(zoom, x, y)
                     W,H = translate_decoder(zoom, w, h)
                     file_name = os.path.splitext(image_file)[0]
-                    result.append([file_name, X, Y, W, H, zoom])
+                    temp_result.append([file_name, X, Y, W, H, zoom])
+            if(len(temp_result)>1):
+                temp_result,residue = overlap_remover(temp_result)
+            result.extend(temp_result)
+
+        break#To run for single image
 
 
 
@@ -149,4 +215,4 @@ def master(folder_path, csv_file_path):
 #C:/Users/stlp/Desktop/Linda/40X
 folder_path = "C:/Users/stlp/Desktop/Linda/40X"
 csv_file_path = "C:/Users/stlp/Desktop/Linda/data_gen_final.csv"
-master(folder_path, csv_file_path)
+master(folder_path, csv_file_path) 
