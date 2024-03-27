@@ -86,22 +86,36 @@ def translate_decoder(zoom, x, y):
     Y= y*zoom
     return X, Y 
 
-def random_xy_fgbg_generator(image):
+def fg_bg_generator(image):
     segmented_image = segment_background_foreground(image)
     fg_bg= segmented_image[:,:,0] 
+    #Masking tester for debugging
+    # print("fg_bg",fg_bg.shape)
+    # print(cv2.countNonZero(fg_bg))
+    # # Create a mask for zero pixels (black pixels)
+    # mask = fg_bg == 0
+
+    # # Create a copy of the image and set zero pixels to green (0, 255, 0 in BGR format)
+    # green_copy = segmented_image.copy()
+    # green_copy[mask] = [0, 255, 0]  # Set zero pixels to green
+    # cv2.imwrite("Final_results/zero.tif",green_copy)
+    return fg_bg
+
+def random_xy_generator(image,fg_bg):
+
     non_black_coordinates = np.argwhere(fg_bg != 0)
 
     # Randomly select a coordinate from the non-black regions
     if len(non_black_coordinates) > 0:
         random_coordinate = random.choice(non_black_coordinates)
-        pixel_x, pixel_y = random_coordinate[0], random_coordinate[1]
+        pixel_y, pixel_x = random_coordinate[0], random_coordinate[1]
     else:
         # Handle the case where there are no non-black regions found
         # This could happen if the segmentation does not identify any non-black regions
         # You may want to take appropriate action here, such as choosing a fallback strategy
         pixel_x, pixel_y = None, None
 
-    return pixel_x,pixel_y,fg_bg
+    return pixel_x,pixel_y
 
 def calculate_overlap(rect1, rect2):
     # Calculate the overlap area between two rectangles
@@ -145,6 +159,7 @@ def overlap_remover(temp_result):
     return temp_cut_result,residue 
 
 def fg_bg_area(x,y,w,h,fg_bg):
+    threshold_percentage = 80
     roi = fg_bg[y:y+h, x:x+w]
     non_black_pixels = cv2.countNonZero(roi)
 
@@ -152,13 +167,13 @@ def fg_bg_area(x,y,w,h,fg_bg):
     total_pixels = w * h
 
     # Check if more than 50% of pixels are non-black
-    if non_black_pixels > total_pixels / 2:
-        return True
+    if non_black_pixels >= total_pixels * (threshold_percentage / 100):
+        return False 
     else:
-        return False
+        return True #more bg
   
 def master(folder_path, csv_file_path):
-    zoom_dict = [1,5,10,20,40,50] 
+    zoom_dict = [1,5,10,20,40,50] #[40]
 
     # Get a list of all files in the folder
     image_files = [file for file in os.listdir(folder_path) if file.endswith(('.tif'))]
@@ -175,21 +190,28 @@ def master(folder_path, csv_file_path):
             temp_result = []
             #block 1 
             i= 0
-            max_retry = 20
+            max_retry = 5
             max_retry_edges = 5
+            temp =max_retry_edges
+            #block 2
+            zoom_image = zoom_in(image,zoom)
+            fg_bg = fg_bg_generator(zoom_image)            
             while i<patch_number:
-                zoom_image = zoom_in(image,zoom)
-                #block 2
-                x, y, fg_bg = random_xy_fgbg_generator(zoom_image)
-                max_x, max_y = zoom_image[:,:,0].shape
+                x, y = random_xy_generator(zoom_image,fg_bg)
+                #Todo: implement above three lines outside the loop to optimize
+                max_y, max_x = zoom_image[:,:,0].shape
                 W,H = random_WH_generator(zoom)
                 w,h = translate_encoder(max_x, max_y, W, H)
                 w= int(w)
                 h= int(h)
                 print(x,y,w,h)
-                if((not fg_bg_area(x,y,w,h,fg_bg)) and max_retry>0):
-                    max_retry -= 1
-                    continue
+                if(fg_bg_area(x,y,w,h,fg_bg)):
+                    if(max_retry>0):
+                        max_retry -= 1 
+                        continue
+                    else:
+                        i = i+1
+                        continue
                 #Edges
                 if((x+w<max_x) and (y+h<max_y)):
                     X,Y = translate_decoder(zoom, x, y)
@@ -200,14 +222,14 @@ def master(folder_path, csv_file_path):
                     if(max_retry_edges>0):
                         max_retry_edges -=1
                         continue 
-                max_retry_edges = 5   
+                max_retry_edges = temp  
                 i = i+1    
             if(len(temp_result)>1):
-                temp_result,residue = overlap_remover(temp_result)
+                temp_result,_ = overlap_remover(temp_result)
+            residue = patch_number - len(temp_result)
             result.extend(temp_result)
-            break    
 
-        break#To run for single image
+        # break#To run for single image
 
 
 
