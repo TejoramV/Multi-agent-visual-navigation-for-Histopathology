@@ -137,14 +137,15 @@ def delete_overlapping_rectangles(data, threshold=0.3): #threshold -> allowed ov
     new_data = []
     for i in range(len(data)):
         overlapping = False
-        for j in range(len(data)):
-            if i != j:
-                overlap_area = calculate_overlap(data[i][1:5], data[j][1:5])
-                total_area = data[i][3] * data[i][4]
-                if overlap_area / total_area > threshold:
-                    overlapping = True
-                    break
-        if not overlapping:
+        for j in range(i+1,len(data)):
+            overlap_area = calculate_overlap(data[i][1:5], data[j][1:5])
+            total_area_rec1 = data[i][3] * data[i][4]
+            total_area_rec2 = data[j][3] * data[j][4]
+            total_area = min(total_area_rec1,total_area_rec2)
+            if overlap_area / total_area > threshold:
+                overlapping = True
+                break
+        if not overlapping: 
             new_data.append(data[i])
         else:
             overlapping_helper = delete_helper(new_data, data[i], threshold)
