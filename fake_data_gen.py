@@ -117,40 +117,32 @@ def random_xy_generator(image,fg_bg):
 
     return pixel_x,pixel_y
 
+
 def calculate_overlap(rect1, rect2):
     # Calculate the overlap area between two rectangles
-    x_overlap = max(0, min(rect1[0]+rect1[2], rect2[0]+rect2[2]) - max(rect1[0], rect2[0]))
-    y_overlap = max(0, min(rect1[1]+rect1[3], rect2[1]+rect2[3]) - max(rect1[1], rect2[1]))
-    overlap_area = x_overlap * y_overlap
+    a = (rect1[0],rect1[1],rect1[0]+rect1[2],rect1[1]+rect1[3])
+    b = (rect2[0],rect2[1],rect2[0]+rect2[2],rect2[1]+rect2[3])
+    dx = max(0, min(a[2], b[2]) - max(a[0], b[0]))
+    dy = max(0, min(a[3], b[3]) - max(a[1], b[1]))
+    overlap_area = dx * dy
     return overlap_area
 
-def delete_helper(new_data, value, threshold):
-    overlapping_helper = False        
-    for i in range(len(new_data)):
-        overlap_area = calculate_overlap(new_data[i][1:5], value[1:5])
-        total_area = new_data[i][3] * new_data[i][4]
+def delete_helper(existing_rectangles, new_rect, threshold):
+    # Helper function to recursively check for overlapping rectangles in existing data
+    for rect in existing_rectangles:
+        overlap_area = calculate_overlap(rect[1:5], new_rect[1:5])
+        total_area_rec1 = rect[3] * rect[4]
+        total_area_rec2 = new_rect[3] * new_rect[4]
+        total_area = min(total_area_rec1, total_area_rec2)
         if overlap_area / total_area > threshold:
-            overlapping_helper = True           
-    return overlapping_helper
+            return True
+    return False
 
-def delete_overlapping_rectangles(data, threshold=0.3): #threshold -> allowed overlap percentage
+def delete_overlapping_rectangles(data, threshold=0.3):
     new_data = []
     for i in range(len(data)):
-        overlapping = False
-        for j in range(i+1,len(data)):
-            overlap_area = calculate_overlap(data[i][1:5], data[j][1:5])
-            total_area_rec1 = data[i][3] * data[i][4]
-            total_area_rec2 = data[j][3] * data[j][4]
-            total_area = min(total_area_rec1,total_area_rec2)
-            if overlap_area / total_area > threshold:
-                overlapping = True
-                break
-        if not overlapping: 
+        if not delete_helper(new_data, data[i], threshold):
             new_data.append(data[i])
-        else:
-            overlapping_helper = delete_helper(new_data, data[i], threshold)
-            if not overlapping_helper:
-                new_data.append(data[i])
     return new_data
 
 def overlap_remover(temp_result):
