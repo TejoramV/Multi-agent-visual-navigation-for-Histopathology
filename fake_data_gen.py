@@ -101,22 +101,25 @@ def fg_bg_generator(image):
     # cv2.imwrite("Final_results/zero.tif",green_copy)
     return fg_bg
 
-def random_xy_generator(image,fg_bg):
-
+def random_xy_generator(fg_bg, w, h):
+    # Get non-black coordinates
     non_black_coordinates = np.argwhere(fg_bg != 0)
 
-    # Randomly select a coordinate from the non-black regions
-    if len(non_black_coordinates) > 0:
-        random_coordinate = random.choice(non_black_coordinates)
-        pixel_y, pixel_x = random_coordinate[0], random_coordinate[1]
-    else:
-        # Handle the case where there are no non-black regions found
-        # This could happen if the segmentation does not identify any non-black regions
-        # You may want to take appropriate action here, such as choosing a fallback strategy
-        pixel_x, pixel_y = None, None
+    # Filter non-black coordinates based on image bounds and rectangle dimensions
+    valid_coordinates = []
+    for coord in non_black_coordinates:
+        y, x = coord  # Unpack coordinate (row, column)
+        if x + w <= fg_bg.shape[1] and y + h <= fg_bg.shape[0]:
+            valid_coordinates.append(coord)
 
-    return pixel_x,pixel_y
+    if len(valid_coordinates) == 0:
+        raise ValueError("No valid coordinates found within the specified bounds.")
 
+    # Randomly select a coordinate from the filtered list
+    random_coordinate = random.choice(valid_coordinates)
+    pixel_y, pixel_x = random_coordinate[0], random_coordinate[1]
+
+    return pixel_x, pixel_y
 
 def calculate_overlap(rect1, rect2):
     # Calculate the overlap area between two rectangles
@@ -151,8 +154,9 @@ def overlap_remover(temp_result):
     residue = len(temp_result) - len(temp_cut_result)
     return temp_cut_result,residue 
 
-def fg_bg_area(x,y,w,h,fg_bg):
-    threshold_percentage = 80
+def fg_bg_area(x,y,w,h,fg_bg,zoom):
+    adaptive_threshold ={1:15,5:50,10:60,20:75,40:80,50:80}
+    threshold_percentage = adaptive_threshold[zoom]#80
     roi = fg_bg[y:y+h, x:x+w]
     non_black_pixels = cv2.countNonZero(roi)
 
@@ -166,7 +170,7 @@ def fg_bg_area(x,y,w,h,fg_bg):
         return True #more bg
   
 def master(folder_path, csv_file_path):
-    zoom_dict = [1,5,10,20,40,50] #[40]
+    zoom_dict = [1,5,10,20,40,50]
 
     # Get a list of all files in the folder
     image_files = [file for file in os.listdir(folder_path) if file.endswith(('.tif'))]
@@ -190,15 +194,14 @@ def master(folder_path, csv_file_path):
             zoom_image = zoom_in(image,zoom)
             fg_bg = fg_bg_generator(zoom_image)            
             while i<patch_number:
-                x, y = random_xy_generator(zoom_image,fg_bg)
-                #Todo: implement above three lines outside the loop to optimize
                 max_y, max_x = zoom_image[:,:,0].shape
                 W,H = random_WH_generator(zoom)
                 w,h = translate_encoder(max_x, max_y, W, H)
                 w= int(w)
                 h= int(h)
+                x, y = random_xy_generator(fg_bg,w,h)
                 print(x,y,w,h)
-                if(fg_bg_area(x,y,w,h,fg_bg)):
+                if(fg_bg_area(x,y,w,h,fg_bg,zoom)):
                     if(max_retry>0):
                         max_retry -= 1 
                         continue
