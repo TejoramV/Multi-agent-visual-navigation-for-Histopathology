@@ -113,7 +113,8 @@ def random_xy_generator(fg_bg, w, h):
             valid_coordinates.append(coord)
 
     if len(valid_coordinates) == 0:
-        raise ValueError("No valid coordinates found within the specified bounds.")
+        # raise ValueError("No valid coordinates found within the specified bounds.")
+        return -1, -1  
 
     # Randomly select a coordinate from the filtered list
     random_coordinate = random.choice(valid_coordinates)
@@ -155,7 +156,7 @@ def overlap_remover(temp_result):
     return temp_cut_result,residue 
 
 def fg_bg_area(x,y,w,h,fg_bg,zoom):
-    adaptive_threshold ={1:15,5:50,10:60,20:75,40:80,50:80}
+    adaptive_threshold ={1:15,5:30,10:50,20:75,40:80,50:80}
     threshold_percentage = adaptive_threshold[zoom]#80
     roi = fg_bg[y:y+h, x:x+w]
     non_black_pixels = cv2.countNonZero(roi)
@@ -200,6 +201,8 @@ def master(folder_path, csv_file_path):
                 w= int(w)
                 h= int(h)
                 x, y = random_xy_generator(fg_bg,w,h)
+                if x == -1:
+                    continue                
                 print(x,y,w,h)
                 if(fg_bg_area(x,y,w,h,fg_bg,zoom)):
                     if(max_retry>0):
