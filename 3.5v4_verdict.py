@@ -41,13 +41,19 @@ if __name__ == "__main__":
     # Slice the DataFrame to get rows 3 to 20 (inclusive)
     result = []
 
+    rows = []
     with open('GPT3.5vs4.csv', newline='') as csvfile:
+        csvreader = csv.reader(csvfile)
+        for row in csvreader:
+            rows.append(row)    
+
+    with open('GPT3.5vs4.csv', 'w', newline='') as csvfile:
     # Create a CSV reader object
-        csvreader = csv.reader(csvfile) 
+        csvwriter = csv.writer(csvfile)        
         i= 0    
         # Iterate over each row in the CSV file
-        for row in csvreader:
-            if(i>3):                          # TO save tokens for testing
+        for row in rows:
+            if(i>50):                          # TO save tokens for testing
                 break
             i+=1
             # Process each row as needed
@@ -59,7 +65,12 @@ if __name__ == "__main__":
                 response = io_gpt(message, gpt_model=gpt_model, max_tokens =max_tokens)
             except:
                 continue    
-            findings_string = response['choices'][0]['message']['content']
-            
-            print(findings_string)
-        
+            findings_string = response['choices'][0]['message']['content'][0]
+
+            result.append(int(findings_string))
+            csvwriter.writerow([row[0], row[1], row[2], row[3], int(findings_string)])  
+        result = result[1:]
+        print(result)
+
+        print("Total Average:",sum(result)/len(result))
+
