@@ -6,7 +6,7 @@ import random
 import csv
 import tifffile as tifi #pip install imagecodecs
 import os
-
+import math
 #write explaination
 #fix delete bg
 #run for all images
@@ -61,7 +61,9 @@ def random_WH_generator(zoom):
     width = np.clip(width, width_per_zoom_dist[zoom-1][0], width_per_zoom_dist[zoom-1][1])
     height = np.random.normal(height_per_zoom_dist[zoom-1][2], height_per_zoom_dist[zoom-1][3])
     height = np.clip(height, height_per_zoom_dist[zoom-1][0], height_per_zoom_dist[zoom-1][1])
-    return width, height #W, H ratios = crop w,h / image w, h
+    area = height* width
+    width_height_ratio = math.sqrt(area)
+    return width_height_ratio #W, H ratios = crop w,h / image w, h
 
 def random_patch_number_generator(zoom):
     patch_number_min = 69.66666666666667
@@ -76,9 +78,9 @@ def random_patch_number_generator(zoom):
     num_patches_per_zoom = patch_number*patch_number_to_zoom_lvl_probabilities[zoom] 
     return num_patches_per_zoom
 
-def translate_encoder(max_x, max_y, W, H):
-    w= max_x*W
-    h= max_x*H
+def translate_encoder(max_x, max_y, width_height_ratio):
+    w= max_x*width_height_ratio
+    h= max_x*width_height_ratio
     return w, h 
 
 def translate_decoder(zoom, x, y):
@@ -196,8 +198,8 @@ def master(folder_path, csv_file_path):
             fg_bg = fg_bg_generator(zoom_image)            
             while i<patch_number:
                 max_y, max_x = zoom_image[:,:,0].shape
-                W,H = random_WH_generator(zoom)
-                w,h = translate_encoder(max_x, max_y, W, H)
+                width_height_ratio = random_WH_generator(zoom)
+                w,h = translate_encoder(max_x, max_y, width_height_ratio)
                 w= int(w)
                 h= int(h)
                 x, y = random_xy_generator(fg_bg,w,h)
@@ -249,3 +251,4 @@ def master(folder_path, csv_file_path):
 folder_path = "40X"
 csv_file_path = "data_gen_final.csv"
 master(folder_path, csv_file_path) 
+
